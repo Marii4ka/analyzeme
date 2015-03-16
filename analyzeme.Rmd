@@ -1,0 +1,190 @@
+```{r}
+library(SNPRelate)
+add.alpha <- function(col, alpha=1){
+  if(missing(col))
+    stop("Please provide a vector of colours.")
+  apply(sapply(col, col2rgb)/255, 2, 
+                     function(x) 
+                       rgb(x[1], x[2], x[3], alpha=alpha))  
+}
+cols <- c("#006BA4","#FF800E","#A2C8EC","#898989","#ABABAB","#595959","#5F9ED1","#CFCFCF","#FFBC79","#C85200","#0063A4","#FF400E","#A228EC","#fd325a","#ABAB4B","#595459","#579ED1","#C6CFCF","#FF6C79","#C55200","#FF1C79","#C81200","#006314","#F1400E","#1228EC","#7dff18","#138503")
+cols.alpha <- add.alpha(cols,0.7)
+palette(cols.alpha)
+```
+
+
+```{r}
+#3/13/15
+# runs without errors! (make sure to delete files before trying this)
+system("unzip 3365.23andme.2183.gz")
+system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --recode vcf")
+system("./bgzip plink.vcf")
+system("./bcftools index plink.vcf.gz")
+# don't need to call genotypes, plink already did it
+system("./bcftools index ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz") # won't need to do this every time
+system("time ./bcftools merge --merge none --force-samples ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz plink.vcf.gz -o all.vcf.gz -O z") #10 minutes
+vcf.fn <- "./all.vcf.gz" 
+snpgdsVCF2GDS(vcf.fn, "merge.gds", method="biallelic.only") # very long!!!! ~20 mins
+genofile <- snpgdsOpen("merge.gds")
+pca <- snpgdsPCA(genofile, num.thread=2) #long: 20 minutes
+pc.percent <- pca$varprop*10
+pops<-read.csv("popids.csv", header=T, stringsAsFactors = FALSE)
+selectedRows <- (pops$Sample %in% pca$sample.id) 
+pops.present <- pops[selectedRows,]
+pops.present <- rbind(pops.present, c("You", "You"))
+pop<-factor(c(pops.present$Population, "You"))[match(pops.present$Sample,pca$sample.id)]
+pop[2505] <- "You"
+tab <- data.frame(sample.id = pca$sample.id,
+    EV1 = pca$eigenvect[,1],    # the first eigenvector
+    EV2 = pca$eigenvect[,2],    # the second eigenvector
+    pop = pop,
+    stringsAsFactors = FALSE)
+
+
+### all
+plot(tab$EV2, tab$EV1, xlab="PC 2", ylab="PC 1", main="Population clustering and you", pch=19, col=as.integer(tab$pop))
+legend("topleft", legend=unique(tab$pop), pch=19, border=NA, col=as.integer(unique(tab$pop)), cex=0.7)
+arrows(tab$EV2[2505]-1e-2, tab$EV1[2505]+1e-2, tab$EV2[2505]-1.1e-4, tab$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab$EV2[2505]-1.1e-2, tab$EV1[2505]+1.1e-2,"You")
+
+### european pops
+tab.euro <- subset(tab, tab$pop=="GBR" | tab$pop=="CEU" | tab$pop=="FIN" | tab$pop=="You" | tab$pop=="TSI" | tab$pop=="IBS")
+plot(tab.euro$EV2, tab.euro$EV1, xlab="PC 2", ylab="PC 1", main="European ancestry clustering and you", pch=19, col=as.integer(tab.euro$pop))
+legend("topright", legend=unique(tab.euro$pop), pch=19, border=NA, col=as.integer(unique(tab.euro$pop)), cex=0.7)
+arrows(tab.euro$EV2[2505]-1e-2, tab.euro$EV1[2505]+1e-2, tab.euro$EV2[2505]-1.1e-4, tab.euro$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab.euro$EV2[2505]-1.1e-2, tab.euro$EV1[2505]+1.1e-2,"You")
+
+### african populations
+tab.africa <- subset(tab, tab$pop=="YRI" | tab$pop=="ASW" | tab$pop=="ACB" | tab$pop=="You" | tab$pop=="ESN" | tab$pop=="GWD" | tab$pop=="LWK" | tab$pop=="MSL")
+plot(tab.africa$EV2, tab.africa$EV1, xlab="PC 2", ylab="PC 1", main="African ancestry clustering and you", pch=19, col=as.integer(tab.africa$pop))
+legend("topright", legend=unique(tab.africa$pop), pch=19, border=NA, col=as.integer(unique(tab.africa$pop)), cex=0.7)
+arrows(tab.africa$EV2[2505]-1e-2, tab.africa$EV1[2505]+1e-2, tab.africa$EV2[2505]-1.1e-4, tab.africa$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab.africa$EV2[2505]-1.1e-2, tab.africa$EV1[2505]+1.1e-2,"You")
+  
+### americas
+tab.america <- subset(tab, tab$pop=="PEL" | tab$pop=="You" | tab$pop=="CLM" | tab$pop=="MXL" | tab$pop=="PUR")
+plot(tab.america$EV2, tab.america$EV1, xlab="PC 2", ylab="PC 1", main="American ancestry clustering and you", pch=19, col=as.integer(tab.america$pop))
+legend("topright", legend=unique(tab.america$pop), pch=19, border=NA, col=as.integer(unique(tab.america$pop)), cex=0.7)
+arrows(tab.america$EV2[2505]-1e-2, tab.america$EV1[2505]+1e-2, tab.america$EV2[2505]-1.1e-4, tab.america$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab.america$EV2[2505]-1.1e-2, tab.america$EV1[2505]+1.1e-2,"You")
+```
+
+```{r}
+#above is slow because of VCF2GDS. maybe skipping vcf will be faster?
+system("unzip 3365.23andme.2183.gz")
+system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --make-bed --out sample")
+system("./plink --vcf ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz --make-bed -out all.chr22") # only need to do this once
+system("./plink --bfile sample --bmerge all.chr22.bed all.chr22.bim all.chr22.fam --make-bed --out merge") # doesn't work. need to remove multiallelic sites/alleles
+bed.fn <- "merge.bed"
+fam.fn <- "merge.fam"
+bim.fn <- "merge.bim"
+snpgdsBED2GDS(bed.fn, fam.fn, bim.fn, "merge.gds")
+genofile <- snpgdsOpen("merge.gds")
+pca <- snpgdsPCA(genofile, num.thread=2) #long 
+pc.percent <- pca$varprop*10
+tab <- data.frame(sample.id = pca$sample.id,
+    EV1 = pca$eigenvect[,1],    # the first eigenvector
+    EV2 = pca$eigenvect[,2],    # the second eigenvector
+    stringsAsFactors = FALSE)
+plot(tab$EV2, tab$EV1, xlab="eigenvector 2", ylab="eigenvector 1")
+```
+======
+Have you had your genome analyzed with 23andme? Have you wondered how this data can be analyzed? Well you're in the right place! Upload your raw data here, and we will analyze it and walk through what exactly it is we're looking at. 
+
+[file upload][use example]
+
+Have you uploaded your file (or used the example)? Great! The analysis will take a while, but while you're waiting, we can talk about what we're doing!
+
+When you send your sample to 23andme, they don't actually sequence it. Instead, they extract the DNA, chop it up into little pieces, heat it up, and pour it onto a special chip. This chip has millions of tiny fragments of DNA that match your DNA. Recall that DNA is made of two strands and has the special property that when heated up, these strands separate. When your sample is poured over the chip, strands that match each other will pair up. If your sample has a mutation, it won't pair up perfectly. We can detect this and that's what 23andme reports in their data. 
+
+The raw data that you are uploading here looks like this:
+
+[example head 23andme.txt]
+
+[number of varaints per chromosome]
+
+[map of variants per chromosome with gene annotations]
+
+---
+
+[PCA]
+One type of analysis we can do with genetic data is called principal component analysis. This analysis can cluster populations of people based on whether they share similar mutations or not. The idea behind this is that people from the same population will share mutations because they are exchanging genetic information (mating). This analysis uses mutations as markers rather than trying to see if mutations have an effect on the person. For example, if I have 2 populations with 2 individuals each:
+
+Population 1: 
+Individual A: ---o---
+Individual B: ---o---
+
+Population 2:
+Individual A: -o-----
+Individual B: -o-----
+
+Individual 1A and 1B share the same mutation and individual 2A and 2B share the same mutation. We can use this information to create a table of individuals and mutations:
+
+       site4   site2
+Ind 1A   1       0
+Ind 1B   1       0
+Ind 2A   0       1
+Ind 2B   0       1
+
+We can use this table to cluster the populations. Individuals that share the same mutations (have 1s in the same column) cluster together. Now we can see which populations you're closest to by comparing you with other individuals. This analysis uses much more than 2 mutations and there are often more than just two populations. This method has been used very successfully and a clear link between PCA and geography has been established. 
+
+[See how you cluster within subpops]
+  - user selects predefined subpopulations
+  - subset those populations and the person's sample
+  - draw the stuff
+  
+While looking at this at a whole population level is interesting, it may also be interesting to see how you compare to certain geographic regions ( for example, withing European populations or within African populations). This analysis is easy to do because we can just compare your sample to samples of the region of interest. Select a region below to see how you compare:
+
+[IBS]
+
+[admixture]
+
+[phylogeny]
+
+[About]
+This application was written in R using the package Shiny to create a shiny looking webpage and make it interactive. In the background it relies on a lot of bioinformatics software like Plink, bcftools, and the R package SNPRelate. The example data was chosen randomly from openSNP.org. It was written by Arun Durvasula, who recently graduated from UC Davis and blogs at arundurvasula.wordpress.com and tweets at twitter.com/arundurvasula. 
+
+PS: I'm looking for a place to do my PhD. If you enjoy this work and are interested in advising me, please contact me!
+=======
+Code trashbin:
+`plink --23file <(zcat 3365.23andme.2183.gz) --snps-only no-DI --recode vcf --`
+`~/Documents/Science/software/vcftools_0.1.12b/vcf-merge ALL.wgs.phase3_shapeit2_mvncall_integrated_v5.20130502.sites.vcf.gz plink.vcf > merge.vcf`
+```{r}
+setwd("~/Documents/Science/analyzeme/")
+system("unzip 3365.23andme.2183.gz > 23andme.txt")
+system("./plink --23file 23andme.txt --snps-only no-DI --recode vcf")
+system("bgzip plink.vcf")
+system("bcftools index plink.vcf.gz")
+system("time bcftools merge --merge none --force-samples ALL.wgs.phase3_shapeit2_mvncall_integrated_v5.20130502.sites.vcf.gz plink.vcf.gz -o all.vcf.gz -O z")
+system("./vcftools --gzvcf all.vcf.gz --plink --out all")
+#----
+system("unzip 3365.23andme.2183.gz > 23andme.txt")
+system("./vcftools --gzvcf ALL.wgs.phase3_shapeit2_mvncall_integrated_v5.20130502.sites.vcf.gz --plink --out all")
+system("./plink --23file 23andme.txt --snps-only no-DI --make-bed")
+system("./bedtools2-2.23.0/bin/bedtools merge -i plink.bed ...")
+system("./plink --file all --genome --noweb --out all.raw")
+system("./plink --file all --read-genome all.genome --cluster --mds-plot 2 --noweb")
+#-----
+
+##CALL GENOTYPES WITH BCFTOOLS
+# this one works but is sloowwwwowowowowow
+system("unzip 3365.23andme.2183.gz")
+system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --recode vcf")
+system("./bgzip plink.vcf")
+system("./bcftools index plink.vcf.gz")
+system("time ./bcftools merge --merge none --force-samples ALL.wgs.phase3_shapeit2_mvncall_integrated_v5.20130502.sites.vcf.gz plink.vcf.gz -o all.vcf.gz -O z")
+system("time ./vcftools --gzvcf all.vcf.gz --plink --out all")
+system("./plink --file all --make-bed --out all")
+system("./plink --file all --genome --allow-no-sex --all --out all --memory 2048 --parallel 4 4")
+system("./plink --file all --read-genome all.genome --cluster --mds-plot 4 --noweb")
+
+#-----
+# 3/13/15
+system("unzip 3365.23andme.2183.gz")
+system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --recode vcf")
+system("./bgzip plink.vcf")
+system("./bcftools index plink.vcf.gz")
+# don't need to call genotypes, plink already did it
+system("./bcftools index ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz") # won't need to do this every time
+system("time ./bcftools merge --merge none --force-samples ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz plink.vcf.gz -o all.vcf.gz -O z") #10 minutes
+```
