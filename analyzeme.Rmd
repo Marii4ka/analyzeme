@@ -88,7 +88,9 @@ tab <- data.frame(sample.id = pca$sample.id,
     stringsAsFactors = FALSE)
 plot(tab$EV2, tab$EV1, xlab="eigenvector 2", ylab="eigenvector 1")
 ```
+
 ======
+
 Have you had your genome analyzed with 23andme? Have you wondered how this data can be analyzed? Well you're in the right place! Upload your raw data here, and we will analyze it and walk through what exactly it is we're looking at. 
 
 [file upload][use example]
@@ -145,6 +147,9 @@ While looking at this at a whole population level is interesting, it may also be
 This application was written in R using the package Shiny to create a shiny looking webpage and make it interactive. In the background it relies on a lot of bioinformatics software like Plink, bcftools, and the R package SNPRelate. The example data was chosen randomly from openSNP.org. It was written by Arun Durvasula, who recently graduated from UC Davis and blogs at arundurvasula.wordpress.com and tweets at twitter.com/arundurvasula. 
 
 PS: I'm looking for a place to do my PhD. If you enjoy this work and are interested in advising me, please contact me!
+
+
+
 =======
 Code trashbin:
 `plink --23file <(zcat 3365.23andme.2183.gz) --snps-only no-DI --recode vcf --`
