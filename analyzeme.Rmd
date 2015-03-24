@@ -11,28 +11,44 @@ cols <- c("#006BA4","#FF800E","#A2C8EC","#898989","#ABABAB","#595959","#5F9ED1",
 cols.alpha <- add.alpha(cols,0.7)
 palette(cols.alpha)
 ```
-
+Running PCA needs the following programs/files available in the directory:
+- plink
+- example 23andme data
+- 1000genomes bed file without multiallelic sites (all.chr.22.clean)
+- popids.csv
 
 ```{r}
-#3/13/15
-# runs without errors! (make sure to delete files before trying this)
-system("unzip 3365.23andme.2183.gz")
-system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --recode vcf")
-system("./bgzip plink.vcf")
-system("./bcftools index plink.vcf.gz")
-# don't need to call genotypes, plink already did it
-system("./bcftools index ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz") # won't need to do this every time
-system("time ./bcftools merge --merge none --force-samples ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz plink.vcf.gz -o all.vcf.gz -O z") #10 minutes
-vcf.fn <- "./all.vcf.gz" 
-snpgdsVCF2GDS(vcf.fn, "merge.gds", method="biallelic.only") # very long!!!! ~20 mins
-genofile <- snpgdsOpen("merge.gds")
-pca <- snpgdsPCA(genofile, num.thread=2) #long: 20 minutes
+# PCA:
+# merge 1000 genomes bed with user supplied file
+# runtime: ~ 20 minutes
+system("time unzip 3365.23andme.2183.gz")
+system("time ./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --make-bed --out sample")
+
+#-------------------
+# this section removes 1000genomes SNPS with more than 1 allele
+# only needs to be run once
+system("zcat < ./ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz | awk -F '\t' '{if($1 == 22) {if ((length($4) == 1) && (length($5) == 1)) print} else{print} }' | gzip > ALL.biallelic.vcf.gz") #drop data with multiple alleles because plink can't deal with it
+system("./plink --vcf ALL.biallelic.vcf.gz --make-bed -out all.chr22") # make it a bed file
+system("./plink --bfile all.chr22 --exclude rs7410429.txt --make-bed --out all.chr.22.clean") # remove stragglers
+#--------------------
+
+system("time ./plink --bfile all.chr.22.clean --bmerge sample.bed sample.bim sample.fam --make-bed --out merge")
+
+#ptm <- proc.time()
+
+bed.fn <- "merge.bed"
+fam.fn <- "merge.fam"
+bim.fn <- "merge.bim"
+snpgdsBED2GDS(bed.fn, fam.fn, bim.fn, "merge3.gds")
+genofile <- snpgdsOpen("merge3.gds")
+pca <- snpgdsPCA(genofile, num.thread=4) #long 
 pc.percent <- pca$varprop*10
+
 pops<-read.csv("popids.csv", header=T, stringsAsFactors = FALSE)
 selectedRows <- (pops$Sample %in% pca$sample.id) 
 pops.present <- pops[selectedRows,]
 pops.present <- rbind(pops.present, c("You", "You"))
-pop<-factor(c(pops.present$Population, "You"))[match(pops.present$Sample,pca$sample.id)]
+pop<-factor(c(pops.present$Population))#[match(pops.present$Sample,pca$sample.id)]
 pop[2505] <- "You"
 tab <- data.frame(sample.id = pca$sample.id,
     EV1 = pca$eigenvect[,1],    # the first eigenvector
@@ -41,52 +57,41 @@ tab <- data.frame(sample.id = pca$sample.id,
     stringsAsFactors = FALSE)
 
 
-### all
+### all plot --------
 plot(tab$EV2, tab$EV1, xlab="PC 2", ylab="PC 1", main="Population clustering and you", pch=19, col=as.integer(tab$pop))
 legend("topleft", legend=unique(tab$pop), pch=19, border=NA, col=as.integer(unique(tab$pop)), cex=0.7)
 arrows(tab$EV2[2505]-1e-2, tab$EV1[2505]+1e-2, tab$EV2[2505]-1.1e-4, tab$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
 text(tab$EV2[2505]-1.1e-2, tab$EV1[2505]+1.1e-2,"You")
+#-----------
 
-### european pops
+### european pops plot ---------
 tab.euro <- subset(tab, tab$pop=="GBR" | tab$pop=="CEU" | tab$pop=="FIN" | tab$pop=="You" | tab$pop=="TSI" | tab$pop=="IBS")
 plot(tab.euro$EV2, tab.euro$EV1, xlab="PC 2", ylab="PC 1", main="European ancestry clustering and you", pch=19, col=as.integer(tab.euro$pop))
 legend("topright", legend=unique(tab.euro$pop), pch=19, border=NA, col=as.integer(unique(tab.euro$pop)), cex=0.7)
 arrows(tab.euro$EV2[2505]-1e-2, tab.euro$EV1[2505]+1e-2, tab.euro$EV2[2505]-1.1e-4, tab.euro$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
 text(tab.euro$EV2[2505]-1.1e-2, tab.euro$EV1[2505]+1.1e-2,"You")
+#-----------
 
-### african populations
+### african populations plot ----
 tab.africa <- subset(tab, tab$pop=="YRI" | tab$pop=="ASW" | tab$pop=="ACB" | tab$pop=="You" | tab$pop=="ESN" | tab$pop=="GWD" | tab$pop=="LWK" | tab$pop=="MSL")
 plot(tab.africa$EV2, tab.africa$EV1, xlab="PC 2", ylab="PC 1", main="African ancestry clustering and you", pch=19, col=as.integer(tab.africa$pop))
 legend("topright", legend=unique(tab.africa$pop), pch=19, border=NA, col=as.integer(unique(tab.africa$pop)), cex=0.7)
 arrows(tab.africa$EV2[2505]-1e-2, tab.africa$EV1[2505]+1e-2, tab.africa$EV2[2505]-1.1e-4, tab.africa$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
 text(tab.africa$EV2[2505]-1.1e-2, tab.africa$EV1[2505]+1.1e-2,"You")
-  
-### americas
+#-----------
+
+### americas pops plot --------
 tab.america <- subset(tab, tab$pop=="PEL" | tab$pop=="You" | tab$pop=="CLM" | tab$pop=="MXL" | tab$pop=="PUR")
 plot(tab.america$EV2, tab.america$EV1, xlab="PC 2", ylab="PC 1", main="American ancestry clustering and you", pch=19, col=as.integer(tab.america$pop))
 legend("topright", legend=unique(tab.america$pop), pch=19, border=NA, col=as.integer(unique(tab.america$pop)), cex=0.7)
 arrows(tab.america$EV2[2505]-1e-2, tab.america$EV1[2505]+1e-2, tab.america$EV2[2505]-1.1e-4, tab.america$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
 text(tab.america$EV2[2505]-1.1e-2, tab.america$EV1[2505]+1.1e-2,"You")
-```
+#-----------
 
-```{r}
-#above is slow because of VCF2GDS. maybe skipping vcf will be faster?
-system("unzip 3365.23andme.2183.gz")
-system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --make-bed --out sample")
-system("./plink --vcf ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz --make-bed -out all.chr22") # only need to do this once
-system("./plink --bfile sample --bmerge all.chr22.bed all.chr22.bim all.chr22.fam --make-bed --out merge") # doesn't work. need to remove multiallelic sites/alleles
-bed.fn <- "merge.bed"
-fam.fn <- "merge.fam"
-bim.fn <- "merge.bim"
-snpgdsBED2GDS(bed.fn, fam.fn, bim.fn, "merge.gds")
-genofile <- snpgdsOpen("merge.gds")
-pca <- snpgdsPCA(genofile, num.thread=2) #long 
-pc.percent <- pca$varprop*10
-tab <- data.frame(sample.id = pca$sample.id,
-    EV1 = pca$eigenvect[,1],    # the first eigenvector
-    EV2 = pca$eigenvect[,2],    # the second eigenvector
-    stringsAsFactors = FALSE)
-plot(tab$EV2, tab$EV1, xlab="eigenvector 2", ylab="eigenvector 1")
+#proc.time() - ptm 
+#    user   system  elapsed 
+#3238.519   14.860 1061.813 
+# total PCA: 20 minutes
 ```
 
 ======
@@ -136,6 +141,8 @@ We can use this table to cluster the populations. Individuals that share the sam
   - draw the stuff
   
 While looking at this at a whole population level is interesting, it may also be interesting to see how you compare to certain geographic regions ( for example, withing European populations or within African populations). This analysis is easy to do because we can just compare your sample to samples of the region of interest. Select a region below to see how you compare:
+
+`note: PCA could look weird because we're using very little data!`
 
 [IBS]
 
@@ -192,4 +199,61 @@ system("./bcftools index plink.vcf.gz")
 # don't need to call genotypes, plink already did it
 system("./bcftools index ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz") # won't need to do this every time
 system("time ./bcftools merge --merge none --force-samples ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz plink.vcf.gz -o all.vcf.gz -O z") #10 minutes
+```
+
+```{r}
+#old PCA
+#3/13/15
+# runs without errors! (make sure to delete files before trying this)
+system("unzip 3365.23andme.2183.gz")
+system("./plink --23file genome_Jessica_Cerny_Full_20150225212451.txt --snps-only no-DI --chr 22 --recode vcf")
+system("./bgzip plink.vcf")
+system("./bcftools index plink.vcf.gz")
+# don't need to call genotypes, plink already did it
+system("./bcftools index ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz") # won't need to do this every time
+system("time ./bcftools merge --merge none --force-samples ALL.chr22.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz plink.vcf.gz -o all.vcf.gz -O z") #10 minutes
+vcf.fn <- "./all.vcf.gz" 
+snpgdsVCF2GDS(vcf.fn, "merge.gds", method="biallelic.only") # very long!!!! ~20 mins
+genofile <- snpgdsOpen("merge.gds")
+pca <- snpgdsPCA(genofile, num.thread=2) #long: 20 minutes
+pc.percent <- pca$varprop*10
+pops<-read.csv("popids.csv", header=T, stringsAsFactors = FALSE)
+selectedRows <- (pops$Sample %in% pca$sample.id) 
+pops.present <- pops[selectedRows,]
+pops.present <- rbind(pops.present, c("You", "You"))
+pop<-factor(c(pops.present$Population, "You"))[match(pops.present$Sample,pca$sample.id)]
+pop[2505] <- "You"
+tab <- data.frame(sample.id = pca$sample.id,
+    EV1 = pca$eigenvect[,1],    # the first eigenvector
+    EV2 = pca$eigenvect[,2],    # the second eigenvector
+    pop = pop,
+    stringsAsFactors = FALSE)
+
+
+### all
+plot(tab$EV2, tab$EV1, xlab="PC 2", ylab="PC 1", main="Population clustering and you", pch=19, col=as.integer(tab$pop))
+legend("topleft", legend=unique(tab$pop), pch=19, border=NA, col=as.integer(unique(tab$pop)), cex=0.7)
+arrows(tab$EV2[2505]-1e-2, tab$EV1[2505]+1e-2, tab$EV2[2505]-1.1e-4, tab$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab$EV2[2505]-1.1e-2, tab$EV1[2505]+1.1e-2,"You")
+
+### european pops
+tab.euro <- subset(tab, tab$pop=="GBR" | tab$pop=="CEU" | tab$pop=="FIN" | tab$pop=="You" | tab$pop=="TSI" | tab$pop=="IBS")
+plot(tab.euro$EV2, tab.euro$EV1, xlab="PC 2", ylab="PC 1", main="European ancestry clustering and you", pch=19, col=as.integer(tab.euro$pop))
+legend("topright", legend=unique(tab.euro$pop), pch=19, border=NA, col=as.integer(unique(tab.euro$pop)), cex=0.7)
+arrows(tab.euro$EV2[2505]-1e-2, tab.euro$EV1[2505]+1e-2, tab.euro$EV2[2505]-1.1e-4, tab.euro$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab.euro$EV2[2505]-1.1e-2, tab.euro$EV1[2505]+1.1e-2,"You")
+
+### african populations
+tab.africa <- subset(tab, tab$pop=="YRI" | tab$pop=="ASW" | tab$pop=="ACB" | tab$pop=="You" | tab$pop=="ESN" | tab$pop=="GWD" | tab$pop=="LWK" | tab$pop=="MSL")
+plot(tab.africa$EV2, tab.africa$EV1, xlab="PC 2", ylab="PC 1", main="African ancestry clustering and you", pch=19, col=as.integer(tab.africa$pop))
+legend("topright", legend=unique(tab.africa$pop), pch=19, border=NA, col=as.integer(unique(tab.africa$pop)), cex=0.7)
+arrows(tab.africa$EV2[2505]-1e-2, tab.africa$EV1[2505]+1e-2, tab.africa$EV2[2505]-1.1e-4, tab.africa$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab.africa$EV2[2505]-1.1e-2, tab.africa$EV1[2505]+1.1e-2,"You")
+  
+### americas
+tab.america <- subset(tab, tab$pop=="PEL" | tab$pop=="You" | tab$pop=="CLM" | tab$pop=="MXL" | tab$pop=="PUR")
+plot(tab.america$EV2, tab.america$EV1, xlab="PC 2", ylab="PC 1", main="American ancestry clustering and you", pch=19, col=as.integer(tab.america$pop))
+legend("topright", legend=unique(tab.america$pop), pch=19, border=NA, col=as.integer(unique(tab.america$pop)), cex=0.7)
+arrows(tab.america$EV2[2505]-1e-2, tab.america$EV1[2505]+1e-2, tab.america$EV2[2505]-1.1e-4, tab.america$EV1[2505]-1.1e-4, col=add.alpha("#EE0000",0.7),lwd=1.5)
+text(tab.america$EV2[2505]-1.1e-2, tab.america$EV1[2505]+1.1e-2,"You")
 ```
