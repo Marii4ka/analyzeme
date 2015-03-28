@@ -1,5 +1,12 @@
 ```{r}
+# initial stuff
+library(jsonlite)
 library(SNPRelate)
+library(gwascat)
+library(ggbio)
+library(TxDb.Hsapiens.UCSC.hg19.knownGene)
+
+
 add.alpha <- function(col, alpha=1){
   if(missing(col))
     stop("Please provide a vector of colours.")
@@ -11,6 +18,42 @@ cols <- c("#006BA4","#FF800E","#A2C8EC","#898989","#ABABAB","#595959","#5F9ED1",
 cols.alpha <- add.alpha(cols,0.7)
 palette(cols.alpha)
 ```
+
+```{r}
+# health related stuff
+
+# view snps across chromosomes
+# change this to page 76 of this: http://watson.nci.nih.gov/bioc_mirror/packages/2.13/bioc/vignettes/ggbio/inst/doc/ggbio.pdf ?
+d <- read.table("genome_Jessica_Cerny_Full_20150225212451.txt", sep="\t", header=FALSE, colClasses=c("character", "character", "numeric", "character"), col.names=c("rsid", "chrom", "position", "genotype"))
+d$chrom = ordered(d$chrom, levels=c(seq(1, 22), "X", "Y", "MT"))
+ggplot(d, aes(x=chrom, fill=factor(chrom))) + ggtitle("Number of mutations per chromosome") + geom_bar() + theme(legend.position = "none")
+
+# annotation stuff goes here.
+# what about something like:
+# 1) from a drop down list, pick trait of interest
+# 2) view a table of all relted SNPs that you have (query mygene.info)
+# 3) select a SNP and view the annotation info on a gene track
+txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+levels(d$chrom) <- paste("chr", c(1:22, "X", "Y", "M"), sep="")
+my.snps <- with(d, GRanges(seqnames=chrom, 
+                       IRanges(start=position, width=1), 
+                       rsid=rsid, genotype=genotype))
+data(gwrngs19)
+gwrngs.emd <- as.data.frame(elementMetadata(gwrngs19))
+dm <- merge(d, gwrngs.emd, by.x="rsid", by.y="SNPs")
+risk.alleles <- gsub("[^\\-]*-([ATCG?])", "\\1", dm$Strongest.SNP.Risk.Allele)
+    i.have.risk <- mapply(function(risk, mine) {
+      risk %in% unlist(strsplit(mine, ""))
+    }, risk.alleles, dm$genotype)
+    dm$i.have.risk <- i.have.risk
+my.risk <- dm[dm$i.have.risk, ]
+rel.cols <- c(colnames(d), "Disease.Trait", "Risk.Allele.Frequency",
+                  "p.Value", "i.have.risk", "X95..CI..text.")
+
+
+```
+
+
 Running PCA needs the following programs/files available in the directory:
 - plink
 - example 23andme data
