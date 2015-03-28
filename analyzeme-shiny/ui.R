@@ -12,13 +12,13 @@ shinyUI(
     ),
     fluidRow(
       column(
-          3,
+          2,
           offset=1,
           h3("About"),
           p("Built with shiny and R")
         ),
       column(
-        7,
+        8,
         p("Have you had your genome analyzed with 23andme? Have you wondered how this data can be analyzed? Well you're in the right place! Upload your raw data here, and we will analyze it and walk through what exactly it is we're looking at. "),
         p("Privacy: your data will be deleted in a week and will never be looked at."),
         fileInput(inputId="inFile", label="Please select a zipped 23andme raw data file.", accept=c("application/x-gzip")),
@@ -31,7 +31,15 @@ shinyUI(
         p("Sometimes diseases are caused by mutations in genes that create proteins."),
 
         plotOutput("snpsByChr"),
-        dataTableOutput('riskTable')
+        dataTableOutput('riskTable'),
+        conditionalPanel(
+          condition = "output.useExample == true",
+          imageOutput("allPCA.image")
+          ),
+        conditionalPanel(
+          condition = "output.useExample == false",
+          plotOutput("allPCA.plot")
+        )
       )
     )
   ) 
