@@ -17,7 +17,7 @@ add.alpha <- function(col, alpha=1){
 }
 cols <- c("#006BA4","#FF800E","#A2C8EC","#898989","#ABABAB","#595959","#5F9ED1","#CFCFCF","#FFBC79","#C85200","#0063A4","#FF400E","#A228EC","#fd325a","#ABAB4B","#595459","#579ED1","#C6CFCF","#FF6C79","#C55200","#FF1C79","#C81200","#006314","#F1400E","#1228EC","#7dff18","#138503")
 cols.alpha <- add.alpha(cols,0.7)
-palette(cols.alpha)
+#palette(cols.alpha)
 
 shinyServer(function(input, output) {
   temp.file <- digest(date())
@@ -43,9 +43,6 @@ shinyServer(function(input, output) {
     d <- paste("./temp/", path, sep="")
   })
 
-  output$useExample <- reactive({
-    print(input$useExample)
-  })
   output$snpsByChr <- renderPlot({
     withProgress(message="Graphing data", value=0.1, {
         #     d <- tryCatch({
@@ -96,12 +93,12 @@ shinyServer(function(input, output) {
       risk.table
     })
   }, options = list(pageLength = 10))
-  output$allPCA.image <- renderImage({
-      list(src = "./static/pca.all.png",
-           contentType = 'image/png',
-           alt = "Example PCA")
-      
-    }, deleteFile=FALSE)
+  
+  output$allPCA.image <- renderUI({
+    images <- c("http://www.i2symbol.com/images/abc-123/o/white_smiling_face_u263A_icon_256x256.png")
+    #images <- c("./static/pca.all.png")
+    tags$img(src= images)
+    })
     
   output$allPCA.plot <- renderPlot({
     withProgress(message="Performing principle component analysis", value=0, {

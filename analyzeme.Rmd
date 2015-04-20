@@ -50,9 +50,34 @@ my.risk <- dm[dm$i.have.risk, ]
 rel.cols <- c(colnames(d), "Disease.Trait", "Risk.Allele.Frequency",
                   "p.Value", "i.have.risk", "X95..CI..text.")
 
+  (elementMetadata(gwrngs19)$my.genotype <- 
+       d$genotype[(match(elementMetadata(gwrngs19)$SNPs, d$rsid))])
 
+    elementMetadata(gwrngs19)$my.risk <- with(elementMetadata(gwrngs19), 
+        mapply(function(risk, mine) {
+          risk %in% unlist(strsplit(mine, ""))
+        }, gsub("[^\\-]*-([ATCG?])", "\\1", Strongest.SNP.Risk.Allele), my.genotype))
+ p <- autoplot(ideoCyto$hg19, cytoband=FALSE)
+   p + geom_segment(gwrngs19, aes(color=my.risk))
 ```
 
+```{r}
+data(ideoCyto, package= "biovizBase")
+autoplot(seqinfo(ideoCyto$hg19), layout = "karyogram")
+
+
+biovizBase::isIdeogram(ideoCyto$hg19)
+autoplot(ideoCyto$hg19, layout = "karyogram", cytoband = TRUE)
+
+data(darned_hg19_subset500, package = "biovizBase")
+dn.2 <- darned_hg19_subset500
+library(GenomicRanges)
+seqlengths(dn)
+## add seqlengths
+## we have seqlegnths information in another data set seqlengths(dn) <- seqlengths(ideoCyto$hg19)[names(seqlengths(dn))] ## then we change order
+dn <- keepSeqlevels(dn, paste0("chr", c(1:22, "X"))) seqlengths(dn)
+autoplot(dn, layout = "karyogram")
+```
 
 Running PCA needs the following programs/files available in the directory:
 - plink
@@ -153,8 +178,9 @@ The raw data that you are uploading here looks like this:
 
 [number of varaints per chromosome]
 
-[map of variants per chromosome with gene annotations]
+[map of variants per chromosome with gene annotations (ggvis karyogram)]
 
+[select SNP, view annotation?]
 ---
 
 [PCA]
